@@ -52,7 +52,7 @@ Window.into(FixedWindows.of(Duration.standardMinutes(5)))
         AfterWatermark.pastEndOfWindow()
             // Early: fire every 30s of processing time while waiting for watermark
             .withEarlyFirings(
-                AfterProcessingTime.pastFirstElement()
+                AfterProcessingTime.pastFirstElementInPane()
                     .plusDelayOf(Duration.standardSeconds(30)))
             // Late: fire on every late element (up to allowed lateness)
             .withLateFirings(AfterPane.elementCountAtLeast(1)))
@@ -97,14 +97,14 @@ Fires after a delay relative to when the first element in the window pane arrive
 ```java
 // Fire 1 minute after the first element in this pane arrives
 Window.into(FixedWindows.of(Duration.standardMinutes(5)))
-    .triggering(AfterProcessingTime.pastFirstElement()
+    .triggering(AfterProcessingTime.pastFirstElementInPane()
         .plusDelayOf(Duration.standardMinutes(1)))
     .discardingFiredPanes();
 
 // Fire 30 seconds after any element arrives (absolute processing time)
 Window.into(new GlobalWindows())
     .triggering(Repeatedly.forever(
-        AfterProcessingTime.pastFirstElement().plusDelayOf(Duration.standardSeconds(30))))
+        AfterProcessingTime.pastFirstElementInPane().plusDelayOf(Duration.standardSeconds(30))))
     .discardingFiredPanes();
 ```
 
@@ -158,7 +158,7 @@ beam.WindowInto(
 **Repeatedly — Repeat any trigger indefinitely:**
 ```java
 // Java: fire every 30s of processing time, forever
-Repeatedly.forever(AfterProcessingTime.pastFirstElement().plusDelayOf(Duration.standardSeconds(30)))
+Repeatedly.forever(AfterProcessingTime.pastFirstElementInPane().plusDelayOf(Duration.standardSeconds(30)))
 ```
 ```python
 from apache_beam.transforms.trigger import Repeatedly
@@ -185,7 +185,7 @@ AfterAll.of(AfterWatermark.pastEndOfWindow(), AfterPane.elementCountAtLeast(100)
 ```java
 // Java: fire every 10s, stop when watermark fires
 Repeatedly.forever(
-    AfterProcessingTime.pastFirstElement().plusDelayOf(Duration.standardSeconds(10)))
+    AfterProcessingTime.pastFirstElementInPane().plusDelayOf(Duration.standardSeconds(10)))
     .orFinally(AfterWatermark.pastEndOfWindow())
 ```
 
@@ -205,7 +205,7 @@ PCollection<KV<String, Long>> metricsPerMinute = eventStream
                 AfterWatermark.pastEndOfWindow()
                     // Speculative: emit partial results every 10s while waiting
                     .withEarlyFirings(
-                        AfterProcessingTime.pastFirstElement()
+                        AfterProcessingTime.pastFirstElementInPane()
                             .plusDelayOf(Duration.standardSeconds(10)))
                     // Late: re-emit when any late element arrives
                     .withLateFirings(AfterPane.elementCountAtLeast(1)))
@@ -418,4 +418,4 @@ PubsubIO.readStrings()
 | Clock skew between producers | Watermark cannot advance because some elements have far-future timestamps | Use `withCreateTime(Duration)` with a bounded lag to cap how far ahead timestamps can be |
 | Custom source not advancing watermark | `UnboundedReader.getWatermark()` returns `BoundedWindow.TIMESTAMP_MIN_VALUE` | Implement proper watermark tracking in custom `UnboundedReader.getWatermark()` |
 | AllowedLateness too short | Elements processed before watermark catches up are dropped | Increase `withAllowedLateness(Duration)` to match source delay characteristics |
-| GlobalWindows with default trigger | No output ever produced | Add explicit trigger (e.g., `Repeatedly.forever(AfterProcessingTime.pastFirstElement().plusDelayOf(Duration.standardSeconds(30))))`) |
+| GlobalWindows with default trigger | No output ever produced | Add explicit trigger (e.g., `Repeatedly.forever(AfterProcessingTime.pastFirstElementInPane().plusDelayOf(Duration.standardSeconds(30))))`) |

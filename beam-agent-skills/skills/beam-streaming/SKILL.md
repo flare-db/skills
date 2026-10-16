@@ -1,11 +1,17 @@
 ---
 name: beam-streaming
-description: Guide for building Apache Beam streaming pipelines with event-time semantics, windowing, watermarks, and stateful processing. Use when working with unbounded sources (Kafka, Pub/Sub), configuring windows and triggers, handling late data, or implementing stateful and timely DoFns.
+description: Guide for building Apache Beam streaming pipelines with event-time semantics, windowing, watermarks, and stateful processing on a non-FlareDB runner. Use when working with unbounded sources (Kafka, Pub/Sub), configuring windows and triggers, handling late data, or implementing stateful and timely DoFns. Do not use for FlareDB jobs, which do not support unbounded sources.
 ---
 
 # Apache Beam Streaming Pipeline Guide
 
 Streaming pipelines in Apache Beam process **unbounded** (continuous, never-ending) data from sources like Apache Kafka, Google Cloud Pub/Sub, or custom socket-based feeds. Unlike batch pipelines, streaming pipelines require explicit decisions about *when* to emit results via windows and triggers.
+
+> **FlareDB does not support unbounded sources.** It does support bounded
+> sources, bounded Splittable DoFns, fixed/sliding windows, and bag/value state
+> per the capability matrix. If the target is FlareDB, use `beam-pipeline`; use
+> this skill only for unbounded input when the user explicitly requests
+> streaming.
 
 ---
 
@@ -20,7 +26,10 @@ Streaming pipelines in Apache Beam process **unbounded** (continuous, never-endi
 
 ---
 
-## 2. Streaming Pipeline Skeleton — Java (Kafka → BigQuery)
+## 2. Streaming Pipeline Skeleton — Java (only when Java is required)
+
+Python is the default SDK. The Java skeleton below is kept for Java-only runners
+and porting; the Python skeleton follows in Section 3.
 
 ```java
 package org.apache.beam.examples.streaming;
@@ -87,7 +96,7 @@ public class KafkaToBigQueryStreaming {
                     .triggering(
                         AfterWatermark.pastEndOfWindow()
                             .withEarlyFirings(
-                                AfterProcessingTime.pastFirstElement()
+                                AfterProcessingTime.pastFirstElementInPane()
                                     .plusDelayOf(Duration.standardSeconds(10)))
                             .withLateFirings(AfterPane.elementCountAtLeast(1)))
                     .accumulatingFiredPanes()
@@ -120,7 +129,7 @@ public class KafkaToBigQueryStreaming {
 
 ---
 
-## 3. Streaming Pipeline Skeleton — Python (Pub/Sub → BigQuery)
+## 3. Streaming Pipeline Skeleton — Python (default, Pub/Sub → BigQuery)
 
 ```python
 # Licensed to the Apache Software Foundation (ASF) under one

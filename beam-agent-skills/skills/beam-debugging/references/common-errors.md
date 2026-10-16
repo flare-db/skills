@@ -2,6 +2,10 @@
 
 Comprehensive lookup table and deep-dive diagnosis for every common Apache Beam pipeline error.
 
+> **Python first.** New pipelines default to Python. For FlareDB runner/CLI
+> errors (`flare logs`, connection refused, install issues), read
+> `flaredb-skills`; this reference covers Beam-level failures.
+
 ---
 
 ## 1. Quick Lookup Table
@@ -22,7 +26,7 @@ Comprehensive lookup table and deep-dive diagnosis for every common Apache Beam 
 | `BigQueryIOException: quotaExceeded` | IO | Too many streaming insert requests per second | Use file-load write method; reduce parallelism; add retry logic |
 | `org.apache.kafka.common.errors.OffsetOutOfRangeException` | IO | Requested Kafka offset no longer exists (retention expired) | Change `auto.offset.reset` to `earliest` or `latest` |
 | `FileNotFoundException` for temp location | Config | Temp/staging GCS or S3 bucket path doesn't exist or no permission | Create bucket; verify service account has `roles/storage.admin` |
-| `UnsupportedOperationException: operation not supported by runner` | Runner compat | Feature not implemented by the target runner (e.g., state on SparkRunner) | Check runner capability matrix; switch to a compatible runner |
+| `UnsupportedOperationException: operation not supported by runner` | Runner compat | Feature not implemented by the target runner (e.g., state on a non-FlareDB runner) | Check the target runner's capabilities; switch to a compatible runner or a bounded FlareDB job |
 | `java.lang.NullPointerException in processElement` | Logic | Element or a field is null and not guarded | Add null checks; use `@Nullable` / `Optional` |
 | `io.grpc.StatusRuntimeException: RESOURCE_EXHAUSTED` | Infra | Worker exceeded gRPC message size limit or quota | Reduce batch sizes; enable chunking in gRPC calls |
 
@@ -437,7 +441,7 @@ batches.apply("CallAPI", ParDo.of(new DoFn<KV<String, Iterable<String>>, String>
 | Idle Kafka partition | No messages → no new watermark from that partition → global watermark freezes | Check source-stage metrics; watermark constant for > 1 minute |
 | Clock skew between producers | One producer sends messages with future timestamps → watermark can't advance past minimum seen | Inspect Kafka message timestamps; check for far-future values |
 | Custom source not advancing watermark | `getWatermark()` returns `BoundedWindow.TIMESTAMP_MIN_VALUE` constantly | Check custom source's `getWatermark()` implementation |
-| `GlobalWindows` with default trigger | Default trigger fires on `TIMESTAMP_MAX_VALUE` — never fires for streaming | Use `Repeatedly.forever(AfterProcessingTime.pastFirstElement()...)` |
+| `GlobalWindows` with default trigger | Default trigger fires on `TIMESTAMP_MAX_VALUE` — never fires for streaming | Use `Repeatedly.forever(AfterProcessingTime.pastFirstElementInPane()...)` |
 
 ### Fix 1: Kafka Idle Timeout (Java)
 

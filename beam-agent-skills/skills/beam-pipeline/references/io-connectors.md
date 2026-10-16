@@ -3,6 +3,16 @@
 
 Complete reference for built-in Beam IO connectors with full read and write examples in Java and Python.
 
+> **Python first.** Use the Python connector for new pipelines; the Java class is
+> for Java-only jobs and porting.
+>
+> **FlareDB note:** bounded sources and bounded Splittable DoFns are supported,
+> so `ReadFromText`/`ReadAllFromText` work for text input. Prefer them; use
+> `beam.Create` + a file-reading `Map`/`FlatMap` only for custom parsing or an
+> explicit input list. Verify file sinks against the current FlareDB docs. See
+> [flaredb-runner.md](flaredb-runner.md) and
+> [flaredb-features.md](flaredb-features.md) before using a connector on FlareDB.
+
 ---
 
 ## 1. TextIO — Text Files
@@ -285,6 +295,10 @@ values | WriteToKafka(
 )
 ```
 
+> **Cross-language:** the Python Kafka transforms are cross-language and need a
+> Java expansion service / classpath unless the target runner already provides
+> one. Do not assume they run natively on DirectRunner without setup.
+
 **Critical Caveats:**
 - **Idle partition watermark stall**: If any Kafka partition receives no data, the watermark freezes for all keys on that worker. Fix: use `.withCreateTime(Duration)` (Java) — it auto-advances the watermark to `now - maxDelay` on idle partitions — or set `timestamp_policy=ReadFromKafka.log_append_time` / `ReadFromKafka.create_time_policy` (Python).
 - **Serializer/Deserializer types must match**: Mismatched SerDe classes cause silent decode failures or ClassCastExceptions.
@@ -364,9 +378,9 @@ strings | beam.Map(lambda s: s.encode("utf-8")) | WriteToPubSub(
 ```
 
 **Caveats:**
-- PubsubIO is **streaming only** — does not work with `DirectRunner` for windowed aggregations (use `DataflowRunner` or `FlinkRunner`).
+- PubsubIO is **streaming only** — does not work with `DirectRunner` for windowed aggregations; use the streaming runner the user explicitly requested.
 - The DirectRunner supports PubsubIO for testing but with limited exactly-once guarantees.
-- Exactly-once delivery requires Dataflow Streaming Engine or a runner with built-in deduplication.
+- Exactly-once delivery requires a runner with built-in deduplication.
 
 ---
 
@@ -541,6 +555,10 @@ users | WriteToJdbc(
     password=jdbc_config["password"]
 )
 ```
+
+> **Cross-language:** Python `ReadFromJdbc`/`WriteToJdbc` are cross-language
+> transforms backed by Java and need an expansion service. Use the
+> `expansion_service` and `driver_jars` options when running locally.
 
 **Caveats:**
 - JdbcIO is **bounded** — use for ETL batch pipelines, not streaming CDC.
