@@ -1,11 +1,17 @@
 ---
 name: beam-debugging
-description: Guide for diagnosing and fixing Apache Beam pipeline failures, including construction-time errors, worker runtime exceptions, logic bugs, performance issues, and testing strategies. Use when a pipeline throws an error, produces wrong output, hangs, OOMs, or runs unexpectedly slowly.
+description: Guide for diagnosing and fixing Apache Beam pipeline failures, including construction-time errors, worker runtime exceptions, logic bugs, performance issues, and testing strategies. Python-first; for FlareDB jobs, pair with flaredb-skills for runner-level logs and errors. Use when a pipeline throws an error, produces wrong output, hangs, OOMs, or runs unexpectedly slowly.
 ---
 
 # Apache Beam Pipeline Debugging Guide
 
 Use this skill when a Beam pipeline fails to build, fails at runtime, produces incorrect results, hangs without output, or has performance issues.
+
+Python is the default SDK. If the failing job runs on FlareDB, remember the
+division of labour: `flaredb-skills` owns submission, `flare logs <JOB_ID>`, and
+runner/CLI errors, while this skill diagnoses the Beam code itself. Never resubmit
+a FlareDB job without re-passing the `flaredb-skills` approval gate when the fix
+is material.
 
 ---
 
@@ -51,22 +57,18 @@ Work through these checks in order:
 
 ---
 
-## 3. Local Testing with DirectRunner
+## 3. Local Testing
+
+Prefer Python for new pipelines. Test transforms with `TestPipeline` and
+`assert_that` first (see [references/testing-patterns.md](references/testing-patterns.md)),
+then run a FlareDB trial only after the user approves the run plan in
+`flaredb-skills`.
 
 **Always run with DirectRunner first.** The DirectRunner:
 - Serializes and deserializes `DoFn` classes to catch non-serializable fields early.
 - Processes elements sequentially to make stack traces clear.
 - Validates coder inference — prevents "works locally, fails on cluster" surprises.
 - Does not require cloud credentials or external infra.
-
-**Java — DirectRunner:**
-```bash
-mvn compile exec:java \
-  -Dexec.mainClass=com.example.MyPipeline \
-  -Dexec.args="--runner=DirectRunner \
-               --inputFile=/tmp/test-input.txt \
-               --outputFile=/tmp/test-output"
-```
 
 **Python — DirectRunner:**
 ```bash
@@ -76,14 +78,23 @@ python my_pipeline.py \
   --output=/tmp/test-output
 ```
 
+**Java — DirectRunner (only for Java pipelines):**
+```bash
+mvn compile exec:java \
+  -Dexec.mainClass=com.example.MyPipeline \
+  -Dexec.args="--runner=DirectRunner \
+               --inputFile=/tmp/test-input.txt \
+               --outputFile=/tmp/test-output"
+```
+
 **Enable more verbose logging:**
 ```bash
-# Java: add to -Dexec.args
---defaultWorkerLogLevel=DEBUG
-
 # Python:
 import logging
 logging.basicConfig(level=logging.DEBUG)
+
+# Java: add to -Dexec.args
+--defaultWorkerLogLevel=DEBUG
 ```
 
 ---
@@ -471,7 +482,25 @@ class MyDoFn(beam.DoFn):
 
 ---
 
-## 8. Load More Detail
+## 8. FlareDB-Specific Checks
+
+When a FlareDB Python job fails or emits no output:
+
+1. Confirm the instance is running (`flare up` if `127.0.0.1:8099` is refused).
+2. Read `flare logs <JOB_ID>` and separate runner errors from Beam errors.
+3. Check the source is a bounded source or bounded SDF (`ReadFromText` and
+   `ReadAllFromText` are supported). `beam.Create` + a file-reading
+   `Map`/`FlatMap` is only one option, not a workaround for an SDF limitation.
+4. Confirm the job does not use unsupported capabilities (unbounded sources,
+   session/custom windows, side inputs, `SetState`/`MapState`, metrics); see
+   `beam-pipeline/references/flaredb-features.md`.
+5. Verify the environment has `flaredb-runner` installed in the active venv and
+   `apache_beam` is importable.
+
+For CLI/install/log details, read `flaredb-skills/SKILL.md`. For FlareDB input
+and output patterns, read `beam-pipeline/references/flaredb-runner.md`.
+
+## 9. Load More Detail
 
 | Reference File | Contents |
 |---|---|

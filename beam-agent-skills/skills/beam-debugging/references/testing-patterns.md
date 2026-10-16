@@ -2,6 +2,10 @@
 
 Complete guide for unit testing, streaming testing, and integration testing Apache Beam pipelines in Java and Python.
 
+> **Python first.** Test new Python transforms with `TestPipeline` + `assert_that`
+> under DirectRunner. A FlareDB trial is execution, not a unit test — it belongs to
+> `flaredb-skills` and requires its approval gate.
+
 ---
 
 ## 1. Unit Testing Strategy

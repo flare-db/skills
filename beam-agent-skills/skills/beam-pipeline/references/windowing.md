@@ -3,6 +3,11 @@
 
 Complete reference for windowing strategies, triggers, accumulation modes, and allowed lateness in Apache Beam.
 
+> **FlareDB note:** FlareDB supports global, fixed, and sliding windows, allowed
+> lateness, triggers, and bag/value state with timers. Unbounded sources,
+> session windows, and custom windows are not supported. Check
+> [flaredb-features.md](flaredb-features.md) before relying on a feature.
+
 ---
 
 ## 1. Why Windowing Exists

@@ -26,14 +26,8 @@ Run locally with DirectRunner:
         --output /tmp/wordcount \
         --runner DirectRunner
 
-Run on Dataflow:
-    python wordcount_batch.py \
-        --input gs://my-bucket/input/*.txt \
-        --output gs://my-bucket/output/wordcount \
-        --runner DataflowRunner \
-        --project my-gcp-project \
-        --region us-central1 \
-        --temp_location gs://my-bucket/tmp
+This portable skeleton is only for an explicitly requested non-FlareDB runner.
+For the default FlareDB workflow, use wordcount_flaredb.py instead.
 """
 
 import argparse

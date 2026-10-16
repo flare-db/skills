@@ -2,6 +2,10 @@
 
 Complete reference for Beam's serialization system — coders, TypeDescriptors, Schemas, and common coder errors.
 
+> **Python first.** New pipelines default to Python; prefer `NamedTuple`, type
+> hints, and `beam.Row` from Section 5. Java `TypeDescriptors` and `@DefaultSchema`
+> apply only to Java jobs and porting.
+
 ---
 
 ## 1. What Is a Coder?

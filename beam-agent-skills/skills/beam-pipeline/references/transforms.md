@@ -3,6 +3,10 @@
 
 Deep reference for all built-in and user-defined transforms in Apache Beam, with complete Java and Python code examples.
 
+> **Python first.** Python is the default SDK for new pipelines; the Java blocks
+> are kept for Java-only jobs and porting. Prefer the Python example, then use
+> Java only when the task requires it.
+
 ---
 
 ## 1. Core Built-in Transforms

@@ -3,6 +3,16 @@
 
 Complete reference for built-in Beam IO connectors with full read and write examples in Java and Python.
 
+> **Python first.** Use the Python connector for new pipelines; the Java class is
+> for Java-only jobs and porting.
+>
+> **FlareDB note:** bounded sources and bounded Splittable DoFns are supported,
+> so `ReadFromText`/`ReadAllFromText` work for text input. Prefer them; use
+> `beam.Create` + a file-reading `Map`/`FlatMap` only for custom parsing or an
+> explicit input list. Verify file sinks against the current FlareDB docs. See
+> [flaredb-runner.md](flaredb-runner.md) and
+> [flaredb-features.md](flaredb-features.md) before using a connector on FlareDB.
+
 ---
 
 ## 1. TextIO — Text Files
@@ -364,9 +374,9 @@ strings | beam.Map(lambda s: s.encode("utf-8")) | WriteToPubSub(
 ```
 
 **Caveats:**
-- PubsubIO is **streaming only** — does not work with `DirectRunner` for windowed aggregations (use `DataflowRunner` or `FlinkRunner`).
+- PubsubIO is **streaming only** — does not work with `DirectRunner` for windowed aggregations; use the streaming runner the user explicitly requested.
 - The DirectRunner supports PubsubIO for testing but with limited exactly-once guarantees.
-- Exactly-once delivery requires Dataflow Streaming Engine or a runner with built-in deduplication.
+- Exactly-once delivery requires a runner with built-in deduplication.
 
 ---
 

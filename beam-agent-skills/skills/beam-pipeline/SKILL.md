@@ -1,236 +1,220 @@
 ---
 name: beam-pipeline
-description: End-to-end guide for coding agents to design, construct, test, and debug Apache Beam batch and streaming data processing pipelines in Java and Python. Use when writing new Beam pipelines, implementing transforms or I/O connectors, configuring windowing and triggers, running tests with TestPipeline, or diagnosing pipeline runtime errors.
+description: End-to-end guide for coding agents to design, construct, test, and debug Apache Beam batch and streaming pipelines. Write Python by default and run local jobs on FlareDB through flaredb-skills; keep Java for explicitly Java work. Use when writing a new pipeline, choosing transforms or I/O, configuring windowing and triggers, or diagnosing pipeline errors.
 ---
 
 # Apache Beam Pipeline Development
 
-Apache Beam is a unified programming model for defining and executing both batch and streaming data-parallel processing pipelines. Pipelines are defined once and can run on multiple execution engines (runners) such as Google Cloud Dataflow, Apache Flink, FlareDB and Apache Spark.
+Apache Beam defines batch and streaming pipelines once and runs them on multiple
+engines. In this workspace the default path is **Python on FlareDB**: this skill
+covers *authoring* the pipeline, and
+[`flaredb-skills`](../../../flaredb-skills/SKILL.md) covers *running* it. Read
+the FlareDB workflow and its approval gate before submitting any job.
 
----
+## 1. Language and runner defaults
 
-## 1. Agent Workflow
+- **Default SDK: Python.** No compile step, no JAR staging, and FlareDB ships the
+  code to workers. Use Java only when the user asks for Java or you are porting
+  an existing Java pipeline.
+- **Default local runner: FlareDB.** Use it for bounded jobs that process more
+  data than should be read into context and return a small result.
+- **DirectRunner** is for fast unit tests and tiny checks.
+- **Other runners are out of default scope.** Do not introduce them unless the
+  user explicitly requests a specific runner.
+- **FlareDB supports bounded sources and bounded Splittable DoFns.** Unbounded
+  sources are not supported. Check
+  [references/flaredb-features.md](references/flaredb-features.md) before using
+  windowing, triggers, or state.
 
-Follow this 8-step workflow when building or modifying a Beam pipeline:
+## 2. Agent workflow
 
-1. **Clarify requirements** — Determine execution model (batch=bounded vs streaming=unbounded), target SDK (Java or Python), input/output systems (Kafka, BigQuery, text files, Pub/Sub, JDBC), and target runner (DirectRunner for local execution, DataflowRunner, FlinkRunner, FlareDB Runner, SparkRunner).
-2. **Define PipelineOptions** — Expose all runtime parameters (input/output paths, runner flags, project IDs) through a typed `PipelineOptions` interface (Java) or argparse with `PipelineOptions` (Python). Never hard-code paths.
-3. **Design the pipeline topology** — Sketch the DAG: sources → transformations → sinks. Decide on grouping (keyed vs unkeyed), side inputs, dead-letter routing. For transform patterns, load [references/transforms.md](references/transforms.md).
-4. **Choose data model and coders** — Prefer Beam Schemas (`@DefaultSchema` in Java, `NamedTuple` in Python) over manual coders. Provide explicit `TypeDescriptor`s in Java lambdas to avoid type-erasure errors. For details, load [references/coders-and-schemas.md](references/coders-and-schemas.md).
-5. **Configure windowing** (streaming/aggregations only) — Any `GroupByKey` or `Combine.perKey` on an unbounded source requires non-global windowing (or a non-default trigger). Choose triggers, accumulation mode, and allowed lateness to match your late-data requirements. For patterns, load [references/windowing.md](references/windowing.md).
-6. **Choose IO connectors** — Use built-in connectors. Configure watermarks for streaming sources. For connector details, load [references/io-connectors.md](references/io-connectors.md).
-7. **Write unit tests** — Test transforms with `TestPipeline` + `Create.of` + `PAssert`/`assert_that`. For streaming, use `TestStream`. Load [references/testing-patterns.md](../beam-debugging/references/testing-patterns.md) from the beam-debugging skill.
-8. **Verify runner compatibility** — Run locally with `DirectRunner` first. Then verify options against the target runner.
+1. **Clarify requirements** — batch vs streaming, Python by default, input/output
+   systems, and target runner. For FlareDB jobs confirm the run plan against
+   `flaredb-skills` (CLI, environment, approval gate).
+2. **Define options** — argparse + `PipelineOptions` in Python. For FlareDB set
+   `job_endpoint` and `job_name`. Never hard-code paths or endpoints.
+3. **Design the topology** — sources → transforms → sinks, grouping, side
+   inputs, dead-letter routing. See
+   [references/transforms.md](references/transforms.md).
+4. **Choose data model and coders** — prefer `typing.NamedTuple` in Python;
+   Java `@DefaultSchema` and `TypeDescriptors` only for Java work. See
+   [references/coders-and-schemas.md](references/coders-and-schemas.md).
+5. **Choose I/O** — for FlareDB, prefer `ReadFromText`/`ReadAllFromText` for
+   plain text input; use `beam.Create` + a file-reading `Map`/`FlatMap` only for
+   custom parsing or an explicit input list. See
+   [references/flaredb-runner.md](references/flaredb-runner.md) and
+   [references/flaredb-features.md](references/flaredb-features.md). For
+   portable connectors see [references/io-connectors.md](references/io-connectors.md).
+6. **Check FlareDB capabilities** — bounded sources/SDFs are supported; use
+   windowing, triggers, or state only where
+   [references/flaredb-features.md](references/flaredb-features.md) lists them.
+   For unbounded input, use the `beam-streaming` skill only if the user
+   explicitly requests streaming.
+7. **Write unit tests** — `TestPipeline` + `assert_that` under DirectRunner. See
+   [../beam-debugging/references/testing-patterns.md](../beam-debugging/references/testing-patterns.md).
+8. **Run** — DirectRunner for tests; FlareDB for the real bounded job after the
+   `flaredb-skills` approval gate.
 
----
-
-## 2. Pipeline Skeleton — Java
-
-```java
-package org.apache.beam.examples;
-
-import org.apache.beam.sdk.Pipeline;
-import org.apache.beam.sdk.io.TextIO;
-import org.apache.beam.sdk.options.Description;
-import org.apache.beam.sdk.options.PipelineOptions;
-import org.apache.beam.sdk.options.PipelineOptionsFactory;
-import org.apache.beam.sdk.options.Validation.Required;
-import org.apache.beam.sdk.transforms.Count;
-import org.apache.beam.sdk.transforms.Filter;
-import org.apache.beam.sdk.transforms.FlatMapElements;
-import org.apache.beam.sdk.transforms.MapElements;
-import org.apache.beam.sdk.values.KV;
-import org.apache.beam.sdk.values.TypeDescriptors;
-import java.util.Arrays;
-
-public class WordCountPipeline {
-
-  // 1. Define options interface — expose all runtime parameters
-  public interface WordCountOptions extends PipelineOptions {
-    @Description("Path of the file to read from")
-    @Required
-    String getInputFile();
-    void setInputFile(String value);
-
-    @Description("Path of the output file (prefix)")
-    @Required
-    String getOutputFile();
-    void setOutputFile(String value);
-  }
-
-  public static void main(String[] args) {
-    // 2. Parse options from command line
-    WordCountOptions options =
-        PipelineOptionsFactory.fromArgs(args).withValidation().as(WordCountOptions.class);
-
-    // 3. Create pipeline with options (runner selected by --runner flag)
-    Pipeline pipeline = Pipeline.create(options);
-
-    // 4. Build the pipeline topology
-    pipeline
-        // Read lines from text file(s) — supports wildcards: gs://bucket/*.txt
-        .apply("ReadLines", TextIO.read().from(options.getInputFile()))
-        // Split each line into words — TypeDescriptors.strings() prevents coder errors
-        .apply("ExtractWords",
-            FlatMapElements.into(TypeDescriptors.strings())
-                .via((String line) -> Arrays.asList(line.split("[^\\p{L}]+"))))
-        // Drop empty strings
-        .apply("FilterEmpty", Filter.by((String word) -> !word.isEmpty()))
-        // Count occurrences of each unique word
-        .apply("CountPerWord", Count.perElement())
-        // Format for output
-        .apply("FormatOutput",
-            MapElements.into(TypeDescriptors.strings())
-                .via((KV<String, Long> wc) -> wc.getKey() + ": " + wc.getValue()))
-        // Write results to text file(s)
-        .apply("WriteResults", TextIO.write().to(options.getOutputFile()));
-
-    // 5. Run (blocks until completion)
-    pipeline.run().waitUntilFinish();
-  }
-}
-```
-
-**Run:**
-```bash
-mvn compile exec:java -Dexec.mainClass=org.apache.beam.examples.WordCountPipeline \
-  -Dexec.args="--inputFile=gs://my-bucket/input/*.txt \
-               --outputFile=gs://my-bucket/output/counts \
-               --runner=DataflowRunner \
-               --project=my-gcp-project \
-               --region=us-central1 \
-               --gcpTempLocation=gs://my-bucket/tmp"
-```
-
----
-
-## 3. Pipeline Skeleton — Python
+## 3. Python skeleton — FlareDB (default)
 
 ```python
-import argparse
 import apache_beam as beam
-from apache_beam.options.pipeline_options import PipelineOptions, SetupOptions
+from apache_beam.options.pipeline_options import PipelineOptions
+from flaredb_runner.flare_runner import FlareRunner
 
 
-def run(argv=None):
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '--input', required=True,
-        help='Input file pattern (e.g., gs://bucket/input/*.txt)')
-    parser.add_argument(
-        '--output', required=True,
-        help='Output file prefix (e.g., gs://bucket/output/counts)')
-    known_args, pipeline_args = parser.parse_known_args(argv)
+pipeline_options = PipelineOptions(
+    job_endpoint="127.0.0.1:8099",
+    job_name="wordcount",
+)
 
-    pipeline_options = PipelineOptions(pipeline_args)
-    # save_main_session=True makes global imports available on workers
-    pipeline_options.view_as(SetupOptions).save_main_session = True
-
-    with beam.Pipeline(options=pipeline_options) as p:
-        (
-            p
-            | 'ReadLines'    >> beam.io.ReadFromText(known_args.input)
-            | 'ExtractWords' >> beam.FlatMap(
-                lambda line: [w for w in line.split() if w.isalpha()])
-            | 'CountWords'   >> beam.combiners.Count.PerElement()
-            | 'Format'       >> beam.Map(
-                lambda word_count: f'{word_count[0]}: {word_count[1]}')
-            | 'WriteResults' >> beam.io.WriteToText(known_args.output)
-        )
-
-
-if __name__ == '__main__':
-    run()
+with beam.Pipeline(runner=FlareRunner(), options=pipeline_options) as p:
+    (
+        p
+        | "InputPaths"  >> beam.Create(["/data/a.txt", "/data/b.txt"])
+        | "ReadLines"   >> beam.io.ReadAllFromText()
+        | "Tokenize"    >> beam.FlatMap(lambda line: line.lower().split())
+        | "Count"       >> beam.combiners.Count.PerElement()
+        | "Format"      >> beam.Map(lambda wc: f"{wc[0]}\t{wc[1]}")
+    )
 ```
 
-**Run:**
-```bash
-python wordcount.py \
-  --input gs://my-bucket/input/*.txt \
-  --output gs://my-bucket/output/counts \
-  --runner DataflowRunner \
-  --project my-gcp-project \
-  --region us-central1 \
-  --temp_location gs://my-bucket/tmp
+Do not submit this (or a trial) until the user approves the brief described in
+`flaredb-skills`. See [references/flaredb-runner.md](references/flaredb-runner.md)
+for input/output patterns and constraints.
+
+## 4. Other runners
+
+FlareDB is the default. If a specific non-FlareDB runner is explicitly
+requested, keep the pipeline portable with argparse + `PipelineOptions` and
+consult that runner's connector support in
+[references/io-connectors.md](references/io-connectors.md). Do not otherwise
+introduce cloud or cluster runners.
+
+## 5. Java skeleton (only when Java is required)
+
+The full Java WordCount lives in
+[examples/WordCountBatch.java](examples/WordCountBatch.java). In short:
+
+```java
+public interface Options extends PipelineOptions {
+  String getInputFile();
+  void setInputFile(String value);
+  String getOutputFile();
+  void setOutputFile(String value);
+}
+
+Pipeline p = Pipeline.create(
+    PipelineOptionsFactory.fromArgs(args).withValidation().as(Options.class));
+
+p.apply("Read", TextIO.read().from(options.getInputFile()))
+ .apply("Words", FlatMapElements.into(TypeDescriptors.strings())
+     .via((String line) -> Arrays.asList(line.split("[^\\p{L}]+"))))
+ .apply("Count", Count.perElement())
+ .apply("Write", TextIO.write().to(options.getOutputFile()));
+
+p.run().waitUntilFinish();
 ```
 
----
+Java-only details (TypeDescriptors, coders, schemas, Maven/Gradle commands) are
+in [references/transforms.md](references/transforms.md),
+[references/coders-and-schemas.md](references/coders-and-schemas.md), and
+[references/io-connectors.md](references/io-connectors.md).
 
-## 4. Transform Selection
+## 6. Transform selection
 
-| Need | Java | Python | Key Constraint |
+| Need | Python | Java | Key constraint |
 |---|---|---|---|
-| 1-to-1 element mapping | `MapElements.into(TypeDescr).via(fn)` | `beam.Map(fn)` | Must provide `TypeDescriptors` for Java lambdas |
-| 1-to-N expansion | `FlatMapElements.into(TypeDescr).via(fn)` | `beam.FlatMap(fn)` | Return iterable/generator |
-| Filter elements | `Filter.by(predicate)` | `beam.Filter(predicate)` | Predicate returns boolean |
-| Complex / stateful / multi-output | `ParDo.of(new MyDoFn())` | `beam.ParDo(MyDoFn())` | Supports lifecycle hooks, side inputs, timers |
-| Count occurrences | `Count.perElement()` | `beam.combiners.Count.PerElement()` | Inputs must be elements (not KVs) |
-| Group values by key | `GroupByKey.create()` | `beam.GroupByKey()` | Requires `KV<K,V>` input; unbounded needs windowing |
-| Associative aggregation | `Combine.perKey(fn)` / `Combine.globally(fn)` | `beam.CombinePerKey(fn)` | Combiner lifting reduces shuffle; prefer over GBK+map |
-| Join two datasets on key | `CoGroupByKey.create()` | `beam.CoGroupByKey()` | Both must be `KV<K, V>` |
-| Merge same-type collections | `Flatten.pCollections()` | `beam.Flatten()` | No data transformation; preserves windowing |
-| Split into N buckets | `Partition.of(N, partFn)` | `beam.Partition(fn, N)` | Partition fn returns integer `[0, N)` |
-| Enrich with lookup | `ParDo.of(dofn).withSideInputs(view)` | `beam.ParDo(dofn, view=AsSingleton(pcoll))` | Side input must fit in worker memory |
-| Route bad records | `ParDo + TupleTag multiple outputs` | `beam.ParDo + TaggedOutput` | Use dead-letter queue pattern |
+| 1-to-1 mapping | `beam.Map(fn)` | `MapElements.into(...).via(fn)` | Java lambdas need `TypeDescriptors` |
+| 1-to-N expansion | `beam.FlatMap(fn)` | `FlatMapElements.into(...).via(fn)` | Return iterable/generator |
+| Filter | `beam.Filter(pred)` | `Filter.by(pred)` | Predicate returns boolean |
+| Complex / stateful / multi-output | `beam.ParDo(MyDoFn())` | `ParDo.of(new MyDoFn())` | Supports lifecycle, side inputs, timers |
+| Count | `beam.combiners.Count.PerElement()` | `Count.perElement()` | Inputs are elements |
+| Group by key | `beam.GroupByKey()` | `GroupByKey.create()` | Needs `(k, v)` / `KV<K,V>` |
+| Associative aggregation | `beam.CombinePerKey(fn)` | `Combine.perKey(fn)` | Prefer over GBK + map |
+| Join by key | `beam.CoGroupByKey()` | `CoGroupByKey.create()` | Both inputs keyed |
+| Merge same-type | `beam.Flatten()` | `Flatten.pCollections()` | Same element type |
+| Split into N buckets | `beam.Partition(fn, N)` | `Partition.of(N, fn)` | Return index `[0, N)` |
+| Enrich with lookup | `beam.Map(fn, lookup=AsDict(pc))` | `ParDo(...).withSideInputs(view)` | Side input fits in memory |
+| Route bad records | `beam.ParDo + TaggedOutput` | `ParDo + TupleTag` outputs | Dead-letter pattern |
 
-*For full code examples of each transform → load [references/transforms.md](references/transforms.md)*
+Full examples: [references/transforms.md](references/transforms.md).
 
----
+## 7. I/O connector selection
 
-## 5. IO Connector Selection
-
-| Source / Sink | Java Class | Python Class | Bounded/Unbounded |
+| Source / sink | Python | Java | Bounded / unbounded |
 |---|---|---|---|
-| Text files (line-by-line) | `TextIO` | `beam.io.ReadFromText` / `WriteToText` | Bounded |
-| Avro files | `AvroIO` | `beam.io.ReadFromAvro` / `WriteToAvro` | Bounded |
-| Parquet files | `ParquetIO` | `beam.io.ReadFromParquet` / `WriteToParquet` | Bounded |
-| Apache Kafka | `KafkaIO` | `beam.io.ReadFromKafka` / `WriteToKafka` | Unbounded |
-| Google Pub/Sub | `PubsubIO` | `beam.io.ReadFromPubSub` / `WriteToPubSub` | Unbounded |
-| Google BigQuery | `BigQueryIO` | `beam.io.ReadFromBigQuery` / `WriteToBigQuery` | Both |
-| JDBC / Relational DB | `JdbcIO` | `beam.io.ReadFromJdbc` / `WriteToJdbc` | Bounded |
+| Text files | `beam.io.ReadFromText` / `WriteToText` | `TextIO` | Bounded |
+| Avro | `beam.io.ReadFromAvro` / `WriteToAvro` | `AvroIO` | Bounded |
+| Parquet | `beam.io.ReadFromParquet` / `WriteToParquet` | `ParquetIO` | Bounded |
+| Kafka | `beam.io.ReadFromKafka` / `WriteToKafka` | `KafkaIO` | Unbounded |
+| Pub/Sub | `beam.io.ReadFromPubSub` / `WriteToPubSub` | `PubsubIO` | Unbounded |
+| BigQuery | `beam.io.ReadFromBigQuery` / `WriteToBigQuery` | `BigQueryIO` | Both |
+| JDBC | `beam.io.ReadFromJdbc` / `WriteToJdbc` | `JdbcIO` | Bounded |
 
-*Full connector usage with code → load [references/io-connectors.md](references/io-connectors.md)*
+**FlareDB note:** bounded sources and bounded Splittable DoFns are supported, so
+`ReadFromText`/`ReadAllFromText` work for text input. Prefer them; use
+`beam.Create` + a file-reading `Map`/`FlatMap` only for custom parsing or an
+explicit input list. Verify file sinks against the current FlareDB docs. See
+[references/flaredb-runner.md](references/flaredb-runner.md) and
+[references/flaredb-features.md](references/flaredb-features.md).
 
----
+Full connector usage: [references/io-connectors.md](references/io-connectors.md).
 
-## 6. Streaming Rules of Thumb
+## 8. FlareDB rules of thumb
 
-- **Never call `GroupByKey` / `Combine.perKey` on an unbounded `PCollection` in `GlobalWindows`** without configuring a non-default trigger — it will either throw at pipeline construction time or never fire.
-- **Decide how to handle late data explicitly.** The default allowed lateness is `0`, so late arrivals are silently dropped. Set a nonzero `withAllowedLateness` (with a `withLateFirings` trigger) only when late data matters for your use case; otherwise leave the default.
-- **Guard against idle source partitions** (Kafka and similar) — an idle partition freezes the watermark for all keys on that worker, preventing downstream windows from firing. Use `withCreateTime(Duration)` (Java) or `timestamp_policy=ReadFromKafka.log_append_time` (Python) so idle partitions auto-advance the watermark.
-- **Set `save_main_session=True`** (Python) when using global imports inside lambdas or `DoFn.process()` — without it, workers cannot deserialize functions that capture module-level names.
-- **Stateful `DoFn`s require keyed input** — apply `beam.Map(lambda x: (key_fn(x), x))` before using state or timers.
+- Reduce inside the pipeline; emit counts, top-N, or one short line per item,
+  never raw content. Aim for a final result under about 50 lines.
+- Make per-item functions defensive: catch per-item exceptions and emit error
+  records rather than failing the job.
+- Never modify or delete inputs.
+- Never submit a FlareDB job (including a trial) before the `flaredb-skills`
+  approval gate. That skill owns installation, `flare up`, submission, and logs.
 
----
+## 9. Streaming rules of thumb
 
-## 7. Testing Checklist
+- Never `GroupByKey`/`Combine.perKey` on an unbounded `PCollection` in
+  `GlobalWindows` without a non-default trigger.
+- Decide late-data handling explicitly; default allowed lateness is 0.
+- Guard idle source partitions (Kafka) so the watermark keeps advancing.
+- Set `save_main_session=True` in Python when lambdas/DoFns capture module
+  globals.
+- Stateful DoFns require keyed input first.
+- These rules apply to unbounded input. FlareDB does not support unbounded
+  sources, but it does support fixed/sliding windows, triggers, and bag/value
+  state per [references/flaredb-features.md](references/flaredb-features.md).
+  Use `beam-streaming` only when the user explicitly requests streaming.
 
-- [ ] Test each `DoFn` or composite transform independently with `TestPipeline` and `Create.of` — do not test the whole pipeline as a unit.
-- [ ] Verify outputs with `PAssert.that(pcoll).containsInAnyOrder(...)` (Java) or `assert_that(pcoll, equal_to([...]))` (Python).
-- [ ] For streaming/windowed logic use `TestStream` to control timestamps and watermark advancement deterministically.
-- [ ] Run with `DirectRunner` before any distributed runner — it validates serialization and coder inference.
-- [ ] Check that `DoFn` classes and all fields are serializable (Java) or picklable (Python).
-- [ ] Verify that IO connectors have the correct credentials and accessible URIs.
+## 10. Testing checklist
 
----
+- [ ] Test each DoFn/transform with `TestPipeline` + `Create` before a full run.
+- [ ] Verify with `assert_that(pcoll, equal_to([...]))` (Python) or `PAssert`
+  (Java).
+- [ ] Use `TestStream` only for streaming/windowed logic on a streaming runner.
+- [ ] Run DirectRunner first; then a FlareDB trial only after approval.
+- [ ] Keep DoFn classes/functions picklable (Python) or serializable (Java).
+- [ ] Verify connectors have correct credentials and accessible paths.
 
-## 8. Quick Debugging
+## 11. Quick debugging
 
 | Error | Fix |
 |---|---|
-| `NotSerializableException` (Java) | Mark non-serializable fields `transient`; initialize them in `@Setup`. Make inner `DoFn` classes `static`. |
-| `PicklingError` (Python) | Avoid closures capturing module globals; don't use `lambda` inside `ParDo` for complex logic — use a `DoFn` class. |
-| `Cannot infer coder` (Java) | Add `TypeDescriptors` to `MapElements`/`FlatMapElements`, or annotate POJO with `@DefaultSchema(JavaFieldSchema.class)`. |
-| `GroupByKey on unbounded without window` | Add `Window.into(FixedWindows.of(...))` before `GroupByKey`. |
-| Pipeline produces no output | Check watermark config — idle source partitions freeze watermarks. Use `withCreateTime`/`withLogAppendTime` (Java) or `timestamp_policy` (Python). |
+| `PicklingError` (Python) | Use a top-level `DoFn` class; initialize resources in `setup()`; set `save_main_session=True`. |
+| `NotSerializableException` (Java) | Mark fields `transient`, initialize in `@Setup`, make inner DoFns static. |
+| `Cannot infer coder` (Java) | Add `TypeDescriptors` or `@DefaultSchema`. |
+| `GroupByKey` on unbounded without window | Add `Window.into(...)` first (non-FlareDB runners). |
+| No output on FlareDB | Check `flare logs <JOB_ID>`; ensure the source is a supported bounded source/SDF and every transform yields compact records. |
+| Connection refused to `127.0.0.1:8099` | Run `flare up`; see `flaredb-skills`. |
+| `ModuleNotFoundError: flaredb_runner` | Activate the venv and `pip install flaredb-runner`. |
 
----
+## 12. Load more detail
 
-## 9. Load More Detail
-
-| Reference File | Contents |
+| Reference | Contents |
 |---|---|
-| [references/transforms.md](references/transforms.md) | All transform types with full Java + Python code, DoFn lifecycle, composites, anti-patterns |
-| [references/windowing.md](references/windowing.md) | Window types, triggers, accumulation modes, allowed lateness, full examples |
-| [references/coders-and-schemas.md](references/coders-and-schemas.md) | Coder types, TypeDescriptors, Beam Schemas, custom coders, error diagnosis |
-| [references/io-connectors.md](references/io-connectors.md) | TextIO, AvroIO, ParquetIO, KafkaIO, PubsubIO, BigQueryIO, JdbcIO — full read/write examples |
+| [references/flaredb-runner.md](references/flaredb-runner.md) | FlareDB Python patterns, input/output, constraints, troubleshooting |
+| [references/flaredb-features.md](references/flaredb-features.md) | FlareDB capability matrix: supported and unsupported Beam features |
+| [references/transforms.md](references/transforms.md) | All transforms with Python + Java code, DoFn lifecycle, composites, anti-patterns |
+| [references/io-connectors.md](references/io-connectors.md) | Text, Avro, Parquet, Kafka, Pub/Sub, BigQuery, JDBC read/write examples |
+| [references/coders-and-schemas.md](references/coders-and-schemas.md) | Coders, type hints, NamedTuple, Beam Schemas, coder errors |
+| [references/windowing.md](references/windowing.md) | Windows, triggers, accumulation modes, allowed lateness |
+| [../beam-debugging/references/testing-patterns.md](../beam-debugging/references/testing-patterns.md) | TestPipeline, `assert_that`, TestStream, integration tests |

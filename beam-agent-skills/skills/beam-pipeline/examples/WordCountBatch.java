@@ -42,16 +42,8 @@ import org.apache.beam.sdk.values.TypeDescriptors;
  *     -Dexec.args="--inputFile=/path/to/input.txt --outputFile=/tmp/wordcount"
  * }</pre>
  *
- * <p>Run with DataflowRunner:
- * <pre>{@code
- *   mvn compile exec:java -Dexec.mainClass=org.apache.beam.examples.WordCountBatch \
- *     -Dexec.args="--runner=DataflowRunner \
- *                  --project=my-project \
- *                  --region=us-central1 \
- *                  --gcpTempLocation=gs://my-bucket/tmp \
- *                  --inputFile=gs://my-bucket/input/*.txt \
- *                  --outputFile=gs://my-bucket/output/wordcount"
- * }</pre>
+ * <p>Java is a porting reference only. Use it when Java is explicitly required;
+ * the default FlareDB workflow uses the Python example wordcount_flaredb.py.
  */
 public class WordCountBatch {
 
