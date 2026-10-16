@@ -441,7 +441,7 @@ batches.apply("CallAPI", ParDo.of(new DoFn<KV<String, Iterable<String>>, String>
 | Idle Kafka partition | No messages → no new watermark from that partition → global watermark freezes | Check source-stage metrics; watermark constant for > 1 minute |
 | Clock skew between producers | One producer sends messages with future timestamps → watermark can't advance past minimum seen | Inspect Kafka message timestamps; check for far-future values |
 | Custom source not advancing watermark | `getWatermark()` returns `BoundedWindow.TIMESTAMP_MIN_VALUE` constantly | Check custom source's `getWatermark()` implementation |
-| `GlobalWindows` with default trigger | Default trigger fires on `TIMESTAMP_MAX_VALUE` — never fires for streaming | Use `Repeatedly.forever(AfterProcessingTime.pastFirstElement()...)` |
+| `GlobalWindows` with default trigger | Default trigger fires on `TIMESTAMP_MAX_VALUE` — never fires for streaming | Use `Repeatedly.forever(AfterProcessingTime.pastFirstElementInPane()...)` |
 
 ### Fix 1: Kafka Idle Timeout (Java)
 

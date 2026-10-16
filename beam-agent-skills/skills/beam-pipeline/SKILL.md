@@ -147,10 +147,10 @@ Full examples: [references/transforms.md](references/transforms.md).
 | Text files | `beam.io.ReadFromText` / `WriteToText` | `TextIO` | Bounded |
 | Avro | `beam.io.ReadFromAvro` / `WriteToAvro` | `AvroIO` | Bounded |
 | Parquet | `beam.io.ReadFromParquet` / `WriteToParquet` | `ParquetIO` | Bounded |
-| Kafka | `beam.io.ReadFromKafka` / `WriteToKafka` | `KafkaIO` | Unbounded |
+| Kafka | `apache_beam.io.kafka.ReadFromKafka` / `apache_beam.io.kafka.WriteToKafka` | `KafkaIO` | Unbounded |
 | Pub/Sub | `beam.io.ReadFromPubSub` / `WriteToPubSub` | `PubsubIO` | Unbounded |
 | BigQuery | `beam.io.ReadFromBigQuery` / `WriteToBigQuery` | `BigQueryIO` | Both |
-| JDBC | `beam.io.ReadFromJdbc` / `WriteToJdbc` | `JdbcIO` | Bounded |
+| JDBC | `apache_beam.io.jdbc.ReadFromJdbc` / `apache_beam.io.jdbc.WriteToJdbc` | `JdbcIO` | Bounded |
 
 **FlareDB note:** bounded sources and bounded Splittable DoFns are supported, so
 `ReadFromText`/`ReadAllFromText` work for text input. Prefer them; use

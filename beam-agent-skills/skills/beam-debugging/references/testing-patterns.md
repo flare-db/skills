@@ -388,7 +388,7 @@ public class WindowedAggregationTest implements Serializable {
             .apply("Window",
                 Window.<String>into(FixedWindows.of(Duration.standardMinutes(5)))
                     .triggering(AfterWatermark.pastEndOfWindow()
-                        .withEarlyFirings(AfterProcessingTime.pastFirstElement()
+                        .withEarlyFirings(AfterProcessingTime.pastFirstElementInPane()
                             .plusDelayOf(Duration.standardSeconds(30))))
                     .discardingFiredPanes())
             .apply(Count.globally().withoutDefaults());

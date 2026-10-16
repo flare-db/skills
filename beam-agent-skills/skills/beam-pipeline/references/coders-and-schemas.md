@@ -417,7 +417,7 @@ records | beam.io.WriteToAvro(
 
 | Error Message | Root Cause | Fix |
 |---|---|---|
-| `No coder registered for Tuple2` | Beam doesn't know how to encode a Python/Java generic tuple | In Java: use `KvCoder` explicitly. In Python: use `NamedTuple` or register a coder. |
+| `No coder registered for Tuple2` | A tuple-like type lacks an explicit coder (mainly a Java/Scala error; Python encodes 2-tuples via `TupleCoder`/`FastPrimitivesCoder`) | Java: use `KvCoder` explicitly. Python: if a custom tuple type is rejected, use `NamedTuple` or register a `TupleCoder`. |
 | `Cannot infer coder for type T` | Java generics erased; Beam can't determine `T` at runtime | Use `TypeDescriptors.xxx()` in `MapElements`/`FlatMapElements`; annotate class with `@DefaultSchema`. |
 | `CoderException: Failed to encode` | Element contains a value the coder cannot handle (e.g., `null` in a non-nullable coder) | Wrap with `NullableCoder.of(innerCoder)`, or filter nulls before encoding. |
 | `java.io.NotSerializableException` inside coder | `SerializableCoder` used on a non-serializable class | Switch to `AvroCoder` or `@DefaultSchema(JavaFieldSchema.class)`, or implement `Serializable`. |

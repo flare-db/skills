@@ -95,8 +95,8 @@ pipeline_options = PipelineOptions(
 with beam.Pipeline(runner=FlareRunner(), options=pipeline_options) as p:
     (
         p
-        | "Inputs" >> beam.Create([...])          # for example a list of file paths
-        | "Process" >> beam.Map(process_one)       # per-item work
+        | "Inputs" >> beam.io.ReadFromText("data/*.txt")  # bounded source/SDF
+        | "Process" >> beam.Map(process_one)               # per-item work
         # | "Aggregate" >> beam.CombinePerKey(sum) # or GroupByKey, as needed
     )
 ```
@@ -104,6 +104,9 @@ with beam.Pipeline(runner=FlareRunner(), options=pipeline_options) as p:
 Options can also be passed on the command line: `python3 pipeline.py --job_endpoint=127.0.0.1:8099 --job_name=my-job`.
 
 Nothing needs to be staged manually in Python: FlareDB ships the pipeline code to the workers.
+For an explicit input list or custom parsing, `beam.Create([...])` plus a
+file-reading `Map`/`FlatMap` is still available, but it is not a workaround for
+an unsupported SDF.
 
 ### Design the pipeline to save tokens
 
@@ -116,8 +119,12 @@ Nothing needs to be staged manually in Python: FlareDB ships the pipeline code t
 ### Known limitations
 
 FlareDB is young. Check https://docs.flare-db.com/llms.txt for current status before relying on any of these:
-- It is batch-oriented. Windowing, state, and unbounded sources may not be supported yet.
-- Splittable-DoFn sources (for example `ReadFromText`) and file sinks (for example `WriteToText`) may not work. If they fail, build the input list with `beam.Create` and read files inside a `Map` or `FlatMap`.
+- Unbounded sources are not supported. Bounded sources and bounded Splittable
+  DoFns are supported, so `ReadFromText` / `ReadAllFromText` work.
+- Per the capability matrix, global/fixed/sliding windows, triggers, allowed
+  lateness, and bag/value state with timers are supported. Session/custom
+  windows, `SetState`/`MapState`, SDF side inputs, metrics, and
+  runner-initiated splitting are not.
 - For persisting results as tables, see the IO docs at https://docs.flare-db.com/io and confirm Python support before using them.
 
 ## Approval gate

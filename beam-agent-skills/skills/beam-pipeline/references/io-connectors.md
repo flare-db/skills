@@ -295,6 +295,10 @@ values | WriteToKafka(
 )
 ```
 
+> **Cross-language:** the Python Kafka transforms are cross-language and need a
+> Java expansion service / classpath unless the target runner already provides
+> one. Do not assume they run natively on DirectRunner without setup.
+
 **Critical Caveats:**
 - **Idle partition watermark stall**: If any Kafka partition receives no data, the watermark freezes for all keys on that worker. Fix: use `.withCreateTime(Duration)` (Java) — it auto-advances the watermark to `now - maxDelay` on idle partitions — or set `timestamp_policy=ReadFromKafka.log_append_time` / `ReadFromKafka.create_time_policy` (Python).
 - **Serializer/Deserializer types must match**: Mismatched SerDe classes cause silent decode failures or ClassCastExceptions.
@@ -551,6 +555,10 @@ users | WriteToJdbc(
     password=jdbc_config["password"]
 )
 ```
+
+> **Cross-language:** Python `ReadFromJdbc`/`WriteToJdbc` are cross-language
+> transforms backed by Java and need an expansion service. Use the
+> `expansion_service` and `driver_jars` options when running locally.
 
 **Caveats:**
 - JdbcIO is **bounded** — use for ETL batch pipelines, not streaming CDC.

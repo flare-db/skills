@@ -96,7 +96,7 @@ public class KafkaToBigQueryStreaming {
                     .triggering(
                         AfterWatermark.pastEndOfWindow()
                             .withEarlyFirings(
-                                AfterProcessingTime.pastFirstElement()
+                                AfterProcessingTime.pastFirstElementInPane()
                                     .plusDelayOf(Duration.standardSeconds(10)))
                             .withLateFirings(AfterPane.elementCountAtLeast(1)))
                     .accumulatingFiredPanes()

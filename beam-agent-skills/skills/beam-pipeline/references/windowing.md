@@ -163,7 +163,7 @@ Window.into(FixedWindows.of(Duration.standardMinutes(5)))
     .triggering(
         AfterWatermark.pastEndOfWindow()
             .withEarlyFirings(
-                AfterProcessingTime.pastFirstElement()
+                AfterProcessingTime.pastFirstElementInPane()
                     .plusDelayOf(Duration.standardSeconds(30)))
             .withLateFirings(AfterPane.elementCountAtLeast(1)))
     .accumulatingFiredPanes()
@@ -197,7 +197,7 @@ Fires after a delay measured in processing (wall-clock) time.
 ```java
 // Fire 1 minute after the first element in the pane arrives (processing time)
 Window.into(FixedWindows.of(Duration.standardMinutes(5)))
-    .triggering(AfterProcessingTime.pastFirstElement().plusDelayOf(Duration.standardMinutes(1)))
+    .triggering(AfterProcessingTime.pastFirstElementInPane().plusDelayOf(Duration.standardMinutes(1)))
     .discardingFiredPanes();
 ```
 
@@ -243,7 +243,7 @@ beam.WindowInto(
 **Repeatedly — Repeat a Trigger Forever:**
 ```java
 // Java: fire every 30 seconds indefinitely
-.triggering(Repeatedly.forever(AfterProcessingTime.pastFirstElement().plusDelayOf(Duration.standardSeconds(30))))
+.triggering(Repeatedly.forever(AfterProcessingTime.pastFirstElementInPane().plusDelayOf(Duration.standardSeconds(30))))
 ```
 
 ```python
@@ -268,7 +268,7 @@ trigger=AfterAny(AfterWatermark(), AfterCount(100))
 ```java
 // Java: fire every 30s processing time, but stop as soon as watermark fires
 .triggering(
-    Repeatedly.forever(AfterProcessingTime.pastFirstElement().plusDelayOf(Duration.standardSeconds(30)))
+    Repeatedly.forever(AfterProcessingTime.pastFirstElementInPane().plusDelayOf(Duration.standardSeconds(30)))
         .orFinally(AfterWatermark.pastEndOfWindow()))
 ```
 
@@ -343,7 +343,7 @@ PCollection<KV<String, Long>> metricsPerMinute = events
                 AfterWatermark.pastEndOfWindow()
                     // Speculative: emit every 10s of processing time while waiting
                     .withEarlyFirings(
-                        AfterProcessingTime.pastFirstElement()
+                        AfterProcessingTime.pastFirstElementInPane()
                             .plusDelayOf(Duration.standardSeconds(10)))
                     // Late: re-emit on every new late element, up to allowed lateness
                     .withLateFirings(AfterPane.elementCountAtLeast(1)))
