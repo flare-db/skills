@@ -4,7 +4,7 @@ Use this reference when the target runner is FlareDB. `beam-pipeline` is for
 *authoring* the pipeline; `flaredb-skills` is for *running* it. Do not submit a
 FlareDB job yourself — `flaredb-skills` owns the CLI, environment, approval gate,
 and log retrieval. Read
-[`flaredb-skills/SKILL.md`](../../../../flaredb-skills/SKILL.md) before running
+[`flaredb-skills/SKILL.md`](../../flaredb-skills/SKILL.md) before running
 anything. For a snapshot of what FlareDB supports, see
 [flaredb-features.md](flaredb-features.md).
 
@@ -86,7 +86,7 @@ Emit one short line per result (never raw content) and aim for a final output yo
 can read in full — usually under about 50 lines. If the full detail is large,
 write the detail to a file you read selectively later, and emit only the summary
 from the pipeline. See
-[`flaredb-skills/SKILL.md`](../../../../flaredb-skills/SKILL.md) for how FlareDB
+[`flaredb-skills/SKILL.md`](../../flaredb-skills/SKILL.md) for how FlareDB
 surfaces the job output and for the current table/IO support matrix.
 
 ## Per-item error handling

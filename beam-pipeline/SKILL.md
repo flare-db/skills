@@ -8,7 +8,7 @@ description: End-to-end guide for coding agents to design, construct, test, and 
 Apache Beam defines batch and streaming pipelines once and runs them on multiple
 engines. In this workspace the default path is **Python on FlareDB**: this skill
 covers *authoring* the pipeline, and
-[`flaredb-skills`](../../../flaredb-skills/SKILL.md) covers *running* it. Read
+[`flaredb-skills`](../flaredb-skills/SKILL.md) covers *running* it. Read
 the FlareDB workflow and its approval gate before submitting any job.
 
 ## 1. Language and runner defaults
